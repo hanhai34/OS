@@ -1,0 +1,286 @@
+#include <stdio.h>
+#include <iostream>
+using namespace std;
+
+void write_p(int i); //模拟写者对Wmutex的P操作，同时也作为写者进程的入口
+void write(int i); //开始写操作
+void write_v(int i); //模拟写者对Wmutex的V操作，写操作完成的时候调用
+
+void radd_p(int i); //模拟读之前对Rmutex的P操作,同时也作为读者进程的入口
+void radd(int i); //Rcount加1
+void read_p(int i); //模拟读者对Wmutex的P操作
+void radd_v(int i); //模拟读之前对Rmutex的V操作
+void read(int i); //开始读操作
+void rsub_p(int i); //模拟读之后对Rmutex的P操作,读操作完成的时候调用
+void rsub(int i); //Rcount减1
+void read_v(int i); //模拟读者对Wmutex的V操作
+void rsub_v(int i); //模拟读之后对Rmutex的V操作
+
+
+int r_num;//读者个数
+int w_num;//写者个数
+int Wmutex = 1;//表示允许写或允许读
+int Rcount = 0;//表示正在读的进程数
+int Rmutex = 1;//表示对Rcount的互斥操作
+int r[10] = { 0,0,0,0,0,0,0,0,0,0 };//表示读者的状态，1表示正在读
+int w[10] = { 0,0,0,0,0,0,0,0,0,0 };//表示写者的状态，1表示正在写
+int w_wait[11] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1 };//表示等待队列，0-9表示写者，10时需引入读者的等待队列，-1表示空
+int r_wait[11] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1 };//读者的等待队列，0-9表示对应的读者，-1为空
+
+//写者进程由3个函数组成
+void write_p(int i) //模拟写者对Wmutex的P操作，同时也作为写者进程的入口
+{
+	Wmutex--;
+	if (Wmutex < 0)
+	{
+		w_wait[-Wmutex] = i;
+	}
+	else
+		write(i);
+}
+
+void write(int i) //开始写操作
+{
+	w[i] = 1;
+}
+
+void write_v(int i) //模拟写者对Wmutex的V操作，写操作完成的时候调用
+{
+	w[i] = 0;
+	Wmutex++;
+	if (Wmutex <= 0)   //表示如果Wmutex <= 0，则从等待队列中选择写者或读者进行操作
+	{
+		int k,j;
+		if ((w_wait[0] >= 0) && (w_wait[0] < w_num))
+		{
+			j = w_wait[0];
+			for (k = 0; k < w_num; k++)w_wait[k] = w_wait[k + 1];
+			write(j);
+		}
+		else
+		{
+			j =r_wait[0];
+			for (k = 0; k < w_num; k++)w_wait[k] = w_wait[k + 1];
+			for (k = 0; k < r_num; k++)r_wait[k] = r_wait[k + 1];
+			radd_v(j);
+		}
+
+	}
+}
+
+//读者进程由8个函数组成
+void radd_p(int i)//模拟读之前对Rmutex的P操作,同时也作为读者进程的入口
+{
+	Rmutex--;
+	if (Rmutex < 0)    //表示如果Rmutex < 0，则进入等待队列
+	{
+		r_wait[-Rmutex] = i;
+	}
+	else
+	{
+		radd(i);
+	}
+}
+
+void radd(int i)//Rcount加1
+{
+	Rcount++;
+	if (Rcount == 1)
+	{
+		read_p(i);
+	}
+	else
+	{
+		radd_v(i);
+	}
+}
+
+void read_p(int i) //模拟读者对Wmutex的P操作
+{
+	Wmutex--;
+	if (Wmutex < 0)
+	{
+		w_wait[-Wmutex - 1] = 10;
+		r_wait[0] = i;
+	}
+	else
+		radd_v(i);
+
+}
+
+void radd_v(int i) //模拟读之前对Rmutex的V操作
+{
+	Rmutex++;
+	if (Rmutex <= 0)  //表示如果Rmutex <= 0，则从等待队列中选择读者进入Rcount的临界区
+	{
+		int k, j;
+		j=r_wait[0];
+		for (k = 0; k < r_num; k++)r_wait[k] = r_wait[k + 1];
+		radd(j);
+	}
+	read(i);
+}
+
+void read(int i)//读
+{
+	r[i] = 1;
+}
+void rsub_p(int i) //模拟读之后对Rmutex的P操作,读操作完成的时候调用
+{
+	r[i] = 0;
+	Rmutex--;
+	rsub(i);
+}
+
+void rsub(int i) //Rcount减1
+{
+	Rcount--;
+	if (Rcount == 0)
+	{
+		read_v(i);
+	}
+	else
+	{
+		rsub_v(i);
+	}
+}
+
+void read_v(int i) //模拟读者对Wmutex的V操作
+{
+	Wmutex++;
+	if (Wmutex <= 0)   //表示如果Wmutex <= 0，则从等待队列中选择写者或读者进行操作
+		{
+				int k,j;
+				if ((w_wait[0] >= 0) && (w_wait[0] < w_num))
+					{
+					    j = w_wait[0];
+						for(k = 0; k < w_num; k++)w_wait[k] = w_wait[k + 1];
+						write(j);
+					 }
+				else {
+						j = r_wait[0];
+						for (k = 0; k < w_num; k++)w_wait[k] = w_wait[k + 1];
+						for (k = 0; k < r_num; k++)r_wait[k] = r_wait[k + 1];
+						radd_v(j);
+				 }
+							 }
+	rsub_v(i);
+}
+
+void rsub_v(int i) //模拟读之后对Rmutex的V操作
+{
+	Rmutex++;
+}
+
+int main() {
+	cout << "请输入写者个数（1到10）：";
+	cin >> w_num;
+	while(w_num < 1 || w_num>10){
+		cout << "输入有误，请重新输入写者个数（1到10）：";
+		cin >> w_num;
+	}//完成对写者个数的输入
+	cout << "请输入读者个数（1到10）：";
+	cin >> r_num;
+	while (r_num < 1 || r_num>10)
+	{
+		cout<< "输入有误，请重新输入读者个数（1到10）：";
+		cin>> r_num;
+	}//完成对读者个数的输入
+	int x, k, j, a[20];
+	while (1) {
+		cout << "****************************" << endl;
+		for (k = 0; k < 20; k++)a[k] = 0;
+		cout << "Wmutex=" << Wmutex << " Rcount=" << Rcount << " Rmutex=" << Rmutex << endl;
+		for (k = 0; k < w_num; k++)
+		{
+			if (w[k] == 1)
+				cout <<"----写者"<<(k+1)<<"正在写"<<endl;
+		}
+		for (k = 0; k < r_num; k++)
+		{
+			if (r[k] == 1)
+				cout <<"----读者"<<(k+1)<<"正在读"<<endl;
+		}
+		if (w_wait[0] == -1)cout<< "等待队列中无对象" << endl;
+		else
+		{
+			cout << "等待队列中有:";
+			for (k = 0; k < w_num; k++)
+			{
+				if (w_wait[k] == 10)
+					for (j = 0; j < 5; j++)
+					{
+						if (r_wait[j] != -1)
+							cout << "-->" << "读者" << (r_wait[j] + 1);
+					}
+				if ((w_wait[k] >= 0) && (w_wait[k] < w_num))
+					cout << "-->" << "写者" << (w_wait[k] + 1);
+			}
+			cout << endl;
+		}
+		for (k = 0; k < w_num; k++)
+		{
+			x = 0;
+			for (j = 0; j < w_num; j++)
+			{
+				if (k == w_wait[j])
+				{
+					a[k] = 1;
+					x = 1;
+				}
+			}
+			if (x == 1) continue;
+			cout << "(" << (k + 1) << ")写者" << (k + 1);
+			if (w[k] == 0)
+				cout << "申请 ";
+			else
+				cout << "完成 ";
+		}
+		for (k = 0; k < r_num; k++)
+		{
+			x = 0;
+			for (j = 0; j < r_num; j++)
+			{
+				if (k == r_wait[j])
+				{
+					a[k + w_num] = 1;
+					x = 1;
+				}
+			}
+			if (x == 1)continue;
+			cout << "(" << (k + 1 + w_num) << ")读者" << (k + 1);
+			if (r[k] == 0)cout << "申请 ";
+			else cout << "完成 ";
+		}
+		cout << " (" << (w_num + r_num + 1) << ") 结束" <<endl;
+		cout << "请输入选项序号：";
+		cin >> x;
+		while ( x < 1 || x > ( w_num + r_num + 1) || a[x - 1] == 1)
+		{
+			if (a[x - 1] == 1)
+				cout << "该对象已在等待队列中，请重新输入：";
+			else cout << "输入有误，请重新输入：";
+			cin >> x;
+				}
+		for (k = 0; k < w_num; k++)
+		{
+			if (x == (k + 1))
+			{
+				if (w[k] == 0) write_p(k);
+				else write_v(k);
+				break;
+			}
+		}
+		for (k = 0; k < r_num; k++)
+		{
+			if (x == (k + 1 + w_num))
+			{
+				if (r[k] == 0)radd_p(k);
+				else rsub_p(k);
+				break;
+			}
+		}
+		if (x == (w_num + r_num + 1))
+			return 0;
+	}
+}
