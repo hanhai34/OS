@@ -1,0 +1,257 @@
+#实验二 进程调度模拟实验之FCFS、SPF
+#include <iostream>
+using namespace std;
+#define getpch(type) (type*)malloc(sizeof(type))
+
+struct PCB {
+    char name[10];
+    char state;
+    int atime;//进程到达时间
+    int btime;//进程开始运行时间
+    int ftime;//进程完成时间
+    int ntime;//进程估计运行时间
+    int rtime;//进程执行时间
+    int ttime;//周转时间
+    float wtime;//带权周转时间(周转时间/估计运行时间) 
+    struct PCB* link;
+}*ready = NULL, * p;//ready 指向队头,p 指向正被调度的进程
+
+typedef struct PCB PCB;
+int T = 0; //初始化时间量
+float total;//记录所有进程的总时间
+double weight;//记录所有进程的带权周转时间
+
+/* 建立对进程进行到达时间排列函数*/
+void sort()
+{
+    PCB* first, * second;
+    int insert = 0;
+    /*进程到达时间最早(值最小)的,插入队首*/
+    if ((ready == NULL) || ((p->atime) < (ready->atime)))
+    {
+        p->link = ready;
+        ready = p;
+        T = p->atime; //更改时间量
+    }
+    /* 进程比较到达时间,插入适当的位置中*/
+    else
+    {
+        first = ready;
+        second = first->link;
+        while (second != NULL)
+        {/*若插入进程比当前队尾进程到达时间短,*/
+            if ((p->atime) < (second->atime))
+            { /*插入到当前队尾进程前面*/
+                p->link = second;
+                first->link = p;
+                second = NULL;
+                insert = 0;
+            }
+            else /* 插入进程到达时间最长,则插入到队尾*/
+            {
+                first = first->link;
+                second = second->link;
+            }
+        }
+        if (insert == 0)
+            first->link = p;
+    }
+}
+
+//  获取队列中的最短进程
+void shortjob()
+{
+    PCB* pr, * min, * qr;
+    min = ready;//min 指向进程对头
+    qr = ready;
+    pr = ready->link;
+    while (pr != NULL)
+    {
+        if ((pr != NULL) && (T >= pr->atime) && (pr->ntime) < (min->ntime))
+        {//当插入进程到达时间要比时间量 T 小
+            min = pr; //min 指向 pr
+            qr->link = pr->link;//qr 的下一个指向 pr 的下一个
+            pr->link = ready;
+            pr = pr->link;
+        }
+        else	//当 pr 的需要时间不小于 min 的需要时间
+        {
+            qr = pr;
+            pr = pr->link;
+        }
+        ready = min;//把最终获取的 min 的需要时间赋给 ready,开始执行
+    }
+}
+
+/*建立进程控制块函数*/
+void input()
+{
+    int i;
+    cout<<"\n 请输入 4 个进程：";
+    //  for (i = 0; i < 5; i++)
+    for (i = 0; i < 4; i++)
+    {
+        cout << "\n 请输入进程号 NO."<<i + 1<<endl;
+        p = getpch(PCB);
+        cout << "输入进程名：";
+        cin >> p->name;
+        cout << "\n 输入进程到达时间：";
+        cin >> p->atime;
+        cout << "\n 输入进程运行时间：";
+        cin >> p->ntime;
+        cout << "\n";
+        p->rtime = 0;
+        p->btime = 0;
+        p->ftime = 0;
+        p->ttime = 0;
+        p->wtime = 0;
+        p->state = 'W';
+        p->link = NULL;
+        sort();
+    }
+}
+
+/*查看进程个数*/
+int space()
+{
+    int l = 0;
+    PCB* pr = ready;
+    while (pr != NULL)
+    {
+        l++;
+        pr = pr->link;
+    }
+    return(l);
+}
+
+/*建立进程显示函数,用于显示当前进程*/
+void disp(PCB* pr)
+{
+    cout<<"\n qname \tstate  \tatime  \tntime  \tbtime  \trtime  \tftime  \tttime  \twtime \n";
+    cout << "|" <<pr->name<<"\t";
+    cout << "|" <<pr->state<<"\t";
+    cout << "|" <<pr->atime<<"\t";
+    cout << "|" <<pr->ntime<<"\t";
+    cout << "|" <<pr->btime<<"\t";
+    cout << "|" <<pr->rtime<<"\t";
+    cout << "|" <<pr->ftime<<"\t";
+    cout << "|" <<pr->ttime<<"\t";
+    cout << "|" <<pr->wtime<<"\t";
+    cout<<"\n";
+}
+
+/* 建立进程查看函数 */
+void check()
+{
+    PCB* pr;
+    cout << "\n **** 当前正在运行的进程是:" << p->name;/*显示当前运行进程*/
+    disp(p);
+    pr = ready;
+    cout << "\n ****当前就绪队列状态为:\n";
+    while (pr != NULL)
+    {
+        disp(pr);
+        pr = pr->link;
+    }
+}
+
+/*建立进程撤消函数（进程运行结束，撤消进程）*/
+void destroy()
+{
+    cout<<"\n 进程"<<"["<<p->name<<"]";
+    free(p);//撤销该进程
+}
+
+//计算各个时间
+void running(PCB* pr)
+{
+    if (T >= pr->atime)
+        pr->btime = T;//插入进程的到达时间比时间量小,T 为该进程的开始时间
+    else
+        pr->btime = pr->atime;//否则该进程到达时间为它的开始时间
+    pr->ftime = pr->btime + pr->ntime;
+    pr->ttime = pr->ftime - pr->atime;
+    pr->wtime = (float)pr->ttime / (float)pr->ntime;
+    total += pr->ttime;
+    weight += pr->wtime;
+    T = pr->ftime;//T 为该上一个进程的完成时间
+}
+
+//计算当前进程的开始执行时间
+void running1(PCB* pr)
+{
+    if (T >= pr->atime)
+        pr->btime = T;
+    else
+        pr->btime = pr->atime;
+}
+
+//判断运行时间和需要运行时间的关系
+void running2(PCB* pr)
+{
+    while (pr->rtime < pr->ntime)
+    {
+        pr->state = 'R';
+        (pr->rtime) = (pr->ntime);
+    }
+    cout << "\n\n ****该进程执行完毕时的状态：\n";
+    pr->state = 'F';
+    disp(pr);
+    destroy();
+}
+
+
+int main()
+{
+    int i, len, h = 0;
+    char ch;
+    total = 0;
+    weight = 0;
+    cout << "*********************************************************\n";
+    cout << "	\n";
+    cout << "	FCFS 算法或 SPF 算法	\n";
+    cout << "*********************************************************\n";
+    input();
+    len = space();
+    cout << "\n 选择算法: ";
+    cin >> i;
+    switch (i)
+    {
+    case 1:
+        cout << "FCFS 算法：\n";
+        break;
+    case 2:
+        cout << "SPF 算法：\n";
+        break;
+    default:
+        cout << "FAULSE";
+    }
+    if (i == 1 || i == 2)
+    {
+        while ((len != 0) && (ready != NULL))
+        {
+            ch = getchar();
+            if (i == 2)
+                shortjob();
+            h++;
+            cout << "\n The execute number:"<< h;
+            p = ready; /*将队首指针赋给 p*/
+            ready = p->link;	/*ready 指向原 p 的下一个进程*/
+            p->link = NULL;	/*p 的 link 赋空*/
+            p->state = 'R';
+            p->btime = p->atime;
+            running1(p);
+            check();
+            running(p);
+            running2(p);
+            cout << "\n 按任一键继续...";
+            ch = getchar();
+        }
+        cout << "\n\n 进程已完成。\n";
+        ch = getchar();
+        cout << "\n******************************************************\n";
+        cout << "\n 平均周转时间："<< total / (float)4;
+        cout << "\n 平均带权周转时间："<< weight / (float)4;
+        cout << "\n******************************************************\n";
+    }
+}
