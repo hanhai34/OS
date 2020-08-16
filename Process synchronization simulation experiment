@@ -1,4 +1,4 @@
-#实验一进程同步模拟实验之读者写者问题
+#实验一 进程同步模拟实验之读者写者问题
 #include <stdio.h>
 #include <iostream>
 using namespace std;
